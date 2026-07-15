@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatDate, formatDuration } from '@/lib/utils'
 import { Icons } from '@/components/ui/icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,10 +13,11 @@ type Tab = 'videos' | 'scripts' | 'voices' | 'thumbnails'
 
 interface LibraryItem {
   id: string
-  title: string
+  title?: string | null
+  name?: string | null
   thumbnailUrl?: string | null
   duration?: number | null
-  status: string
+  status?: string
   createdAt: string | Date
   videoUrl?: string | null
   resolution?: string | null
@@ -261,8 +262,8 @@ function VideoCard({ video, viewMode, onPreview, onDownload }: {
             )}
           </div>
         </div>
-        <span className={cn('badge', statusConfig[video.status]?.className)}>
-          {statusConfig[video.status]?.label}
+        <span className={cn('badge', statusConfig[video.status || '']?.className || 'badge-info')}>
+          {statusConfig[video.status || '']?.label || 'Unknown'}
         </span>
         <div className="flex items-center gap-1">
           <Button 
@@ -328,8 +329,8 @@ function VideoCard({ video, viewMode, onPreview, onDownload }: {
         <p className="font-medium truncate mb-2">{video.title}</p>
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">{formatDate(video.createdAt)}</span>
-          <span className={cn('badge', statusConfig[video.status]?.className)}>
-            {statusConfig[video.status]?.label}
+          <span className={cn('badge', statusConfig[video.status || '']?.className || 'badge-info')}>
+            {statusConfig[video.status || '']?.label || 'Unknown'}
           </span>
         </div>
         {isPlayable && (
@@ -358,16 +359,16 @@ function VideoCard({ video, viewMode, onPreview, onDownload }: {
   )
 }
 
-function ScriptCard({ script, viewMode }: { script: { id: string; title: string; content: string; niche: string; createdAt: string }; viewMode: 'grid' | 'list' }) {
+function ScriptCard({ script, viewMode }: { script: { id: string; title?: string | null; content?: string | null; niche?: string | null; createdAt: string | Date }; viewMode: 'grid' | 'list' }) {
   if (viewMode === 'list') {
     return (
       <div className="bg-card rounded-xl p-4 border border-border hover:border-primary/50 transition-colors">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">{script.title}</p>
-            <p className="text-sm text-muted-foreground mt-1">{script.content.substring(0, 100)}...</p>
+            <p className="font-medium truncate">{script.title || 'Untitled'}</p>
+            <p className="text-sm text-muted-foreground mt-1">{script.content?.substring(0, 100) || ''}...</p>
             <div className="flex items-center gap-4 mt-2">
-              <span className="text-xs bg-muted px-2 py-1 rounded">{script.niche}</span>
+              <span className="text-xs bg-muted px-2 py-1 rounded">{script.niche || 'General'}</span>
               <span className="text-xs text-muted-foreground">{formatDate(script.createdAt)}</span>
             </div>
           </div>
@@ -388,11 +389,11 @@ function ScriptCard({ script, viewMode }: { script: { id: string; title: string;
     <div className="bg-card rounded-xl p-4 border border-border hover:border-primary/50 transition-colors">
       <div className="flex items-start justify-between mb-3">
         <div>
-          <p className="font-medium">{script.title}</p>
-          <span className="text-xs bg-muted px-2 py-1 rounded mt-1 inline-block">{script.niche}</span>
+          <p className="font-medium">{script.title || 'Untitled'}</p>
+          <span className="text-xs bg-muted px-2 py-1 rounded mt-1 inline-block">{script.niche || 'General'}</span>
         </div>
       </div>
-      <p className="text-sm text-muted-foreground line-clamp-3">{script.content}</p>
+      <p className="text-sm text-muted-foreground line-clamp-3">{script.content || ''}</p>
       <div className="flex items-center justify-between mt-4">
         <span className="text-xs text-muted-foreground">{formatDate(script.createdAt)}</span>
         <div className="flex items-center gap-1">
@@ -408,7 +409,7 @@ function ScriptCard({ script, viewMode }: { script: { id: string; title: string;
   )
 }
 
-function VoiceCard({ voice, viewMode }: { voice: { id: string; name: string; provider: string; duration: number; createdAt: string }; viewMode: 'grid' | 'list' }) {
+function VoiceCard({ voice, viewMode }: { voice: { id: string; name?: string | null; provider?: string | null; duration?: number | null; createdAt: string | Date }; viewMode: 'grid' | 'list' }) {
   return (
     <div className="bg-card rounded-xl p-4 border border-border hover:border-primary/50 transition-colors">
       <div className="flex items-center gap-3 mb-3">
@@ -422,7 +423,7 @@ function VoiceCard({ voice, viewMode }: { voice: { id: string; name: string; pro
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">
-          {Math.floor(voice.duration / 60)}:{(voice.duration % 60).toString().padStart(2, '0')}
+          {voice.duration ? `${Math.floor(voice.duration / 60)}:${(voice.duration % 60).toString().padStart(2, '0')}` : '0:00'}
         </span>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon">
@@ -437,7 +438,7 @@ function VoiceCard({ voice, viewMode }: { voice: { id: string; name: string; pro
   )
 }
 
-function ThumbnailCard({ thumbnail, viewMode }: { thumbnail: { id: string; title: string; template: string; createdAt: string }; viewMode: 'grid' | 'list' }) {
+function ThumbnailCard({ thumbnail, viewMode }: { thumbnail: { id: string; title?: string | null; template?: string | null; createdAt: string | Date }; viewMode: 'grid' | 'list' }) {
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden hover:border-primary/50 transition-colors">
       <div className="aspect-video bg-gradient-to-br from-primary/20 to-purple-900/20 flex items-center justify-center">
