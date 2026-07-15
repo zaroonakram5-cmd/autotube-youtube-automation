@@ -20,6 +20,7 @@ const {
   CheckCircle,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   Zap,
   Sparkles,
   Mic,
@@ -97,6 +98,8 @@ const {
   Loader2,
   Loader,
   TrendingUp,
+  Save,
+  Info,
 } = LucideIcons
 
 export const Icons = {
@@ -118,6 +121,8 @@ export const Icons = {
   check: CheckCircle,
   x: XCircle,
   alert: AlertCircle,
+  alertCircle: AlertCircle,
+  alertTriangle: AlertTriangle,
   zap: Zap,
   sparkles: Sparkles,
   mic: Mic,
@@ -193,4 +198,6 @@ export const Icons = {
   spinner: Loader2,
   loader: Loader,
   trendingUp: TrendingUp,
+  save: Save,
+  info: Info,
 }
