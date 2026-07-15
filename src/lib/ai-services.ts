@@ -23,30 +23,35 @@ async function getApiKey(userId: string, provider: string): Promise<string | nul
   }
 }
 
-// Gemini Content Generation (Primary)
-export async function generateContentWithGemini(
+// xAI Grok Content Generation (Primary)
+export async function generateContentWithGrok(
   userId: string,
   niche: string,
   topic: string
 ): Promise<GeneratedContent> {
-  const apiKey = await getApiKey(userId, 'gemini')
+  const apiKey = await getApiKey(userId, 'xai')
   if (!apiKey) {
-    throw new Error('Gemini API key not configured. Please add your Gemini API key in Settings.')
+    throw new Error('xAI API key not configured. Please add your xAI API key in Settings.')
   }
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    'https://api.x.ai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        contents: [
+        model: 'grok-2-1212',
+        messages: [
           {
-            parts: [
-              {
-                text: `You are an expert YouTube script writer. Create engaging, viral-worthy video content.
-
-Niche: ${niche}
+            role: 'system',
+            content: 'You are an expert YouTube script writer. Create engaging, viral-worthy video content.',
+          },
+          {
+            role: 'user',
+            content: `Niche: ${niche}
 Topic: ${topic}
 
 Create a complete YouTube video script with:
@@ -58,32 +63,26 @@ Create a complete YouTube video script with:
 
 IMPORTANT: Return ONLY valid JSON in this exact format, no markdown, no code blocks, just pure JSON:
 {"title":"Your video title here","script":"Your full script text here...","description":"Your description here","tags":["tag1","tag2","tag3"],"hashtags":["#hashtag1","#hashtag2"]}`,
-              },
-            ],
           },
         ],
-        generationConfig: {
-          temperature: 0.9,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 8192,
-        },
+        temperature: 0.9,
+        max_tokens: 8192,
       }),
     }
   )
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Gemini API error (${response.status}): ${errorText}`)
+    throw new Error(`xAI API error (${response.status}): ${errorText}`)
   }
 
   const data = await response.json()
   
-  if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
-    throw new Error('Invalid Gemini response format')
+  if (!data.choices || !data.choices[0]?.message?.content) {
+    throw new Error('Invalid xAI response format')
   }
 
-  let content = data.candidates[0].content.parts[0].text
+  let content = data.choices[0].message.content
   
   // Clean up the response - remove markdown code blocks if present
   content = content.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim()
@@ -109,47 +108,46 @@ IMPORTANT: Return ONLY valid JSON in this exact format, no markdown, no code blo
   }
 }
 
-// Fallback: Gemini 1.5 Flash (if 2.0 is not available)
-export async function generateContentWithGeminiFlash(
+// Fallback: Grok Beta model
+export async function generateContentWithGrokBeta(
   userId: string,
   niche: string,
   topic: string
 ): Promise<GeneratedContent> {
-  const apiKey = await getApiKey(userId, 'gemini')
+  const apiKey = await getApiKey(userId, 'xai')
   if (!apiKey) {
-    throw new Error('Gemini API key not configured')
+    throw new Error('xAI API key not configured')
   }
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    'https://api.x.ai/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        contents: [
+        model: 'grok-beta',
+        messages: [
           {
-            parts: [
-              {
-                text: `Create a YouTube video script for niche: ${niche}, topic: ${topic}. 
+            role: 'user',
+            content: `Create a YouTube video script for niche: ${niche}, topic: ${topic}. 
                        Return JSON: {"title":"...","script":"...","description":"...","tags":[...],"hashtags":[...]}`,
-              },
-            ],
           },
         ],
-        generationConfig: {
-          temperature: 0.8,
-          maxOutputTokens: 4096,
-        },
+        temperature: 0.8,
+        max_tokens: 4096,
       }),
     }
   )
 
   if (!response.ok) {
-    throw new Error(`Gemini Flash API error: ${response.statusText}`)
+    throw new Error(`xAI Grok Beta API error: ${response.statusText}`)
   }
 
   const data = await response.json()
-  const content = data.candidates[0].content.parts[0].text
+  const content = data.choices[0].message.content
   
   const jsonMatch = content.match(/\{[\s\S]*\}/)
   if (!jsonMatch) {
@@ -159,18 +157,18 @@ export async function generateContentWithGeminiFlash(
   return JSON.parse(jsonMatch[0])
 }
 
-// Primary content generation using Gemini
+// Primary content generation using xAI Grok
 export async function generateVideoContent(
   userId: string,
   request: VideoGenerationRequest
 ): Promise<GeneratedContent> {
   try {
-    // Try Gemini 2.0 Flash first
-    return await generateContentWithGemini(userId, request.niche, request.topic)
+    // Try Grok 2 first
+    return await generateContentWithGrok(userId, request.niche, request.topic)
   } catch (error) {
-    // If 2.0 fails, try 1.5 Flash as fallback
-    console.error('Gemini 2.0 failed, trying 1.5 Flash:', error)
-    return await generateContentWithGeminiFlash(userId, request.niche, request.topic)
+    // If Grok 2 fails, try Grok Beta as fallback
+    console.error('Grok 2 failed, trying Grok Beta:', error)
+    return await generateContentWithGrokBeta(userId, request.niche, request.topic)
   }
 }
 
@@ -181,10 +179,11 @@ export async function validateApiKey(userId: string, provider: string): Promise<
     if (!apiKey) return false
 
     switch (provider) {
-      case 'gemini': {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        )
+      case 'xai': {
+        // Test xAI API with a simple request
+        const response = await fetch('https://api.x.ai/v1/models', {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        })
         return response.ok
       }
       case 'openai': {
@@ -209,6 +208,12 @@ export async function validateApiKey(userId: string, provider: string): Promise<
         const response = await fetch('https://api.stability.ai/v1/user/balance', {
           headers: { Authorization: `Bearer ${apiKey}` },
         })
+        return response.ok
+      }
+      case 'gemini': {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+        )
         return response.ok
       }
       default:
