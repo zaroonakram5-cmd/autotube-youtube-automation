@@ -1,17 +1,26 @@
 import prisma from './prisma'
 import type { GeneratedContent, VideoGenerationRequest } from '@/types'
 
-// Get user's API key for a specific provider
+// Get API key - first check environment variable, then user database
 async function getApiKey(userId: string, provider: string): Promise<string | null> {
-  const apiKey = await prisma.apiKey.findUnique({
-    where: {
-      userId_provider: {
-        userId,
-        provider,
+  // First check environment variable (global fallback)
+  const envKey = process.env[`${provider.toUpperCase()}_API_KEY`]
+  if (envKey) return envKey
+  
+  // Then check user-saved API key in database
+  try {
+    const apiKey = await prisma.apiKey.findUnique({
+      where: {
+        userId_provider: {
+          userId,
+          provider,
+        },
       },
-    },
-  })
-  return apiKey?.encryptedKey || null
+    })
+    return apiKey?.encryptedKey || null
+  } catch {
+    return null
+  }
 }
 
 // Gemini Content Generation (Primary)
