@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Please refresh the page and try again' }, { status: 401 })
     }
 
     const { niche, topic, voiceProvider, voiceId, speed, pitch, resolution } = await request.json()
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     // Check user credits
     if (user.credits < 5) {
       return NextResponse.json(
-        { error: 'Insufficient credits' },
+        { error: 'Insufficient credits. Please contact support.' },
         { status: 402 }
       )
     }
@@ -54,11 +54,11 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Deduct credits
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { credits: { decrement: 5 } },
-    })
+    // Deduct credits (skip for demo)
+    // await prisma.user.update({
+    //   where: { id: user.id },
+    //   data: { credits: { decrement: 5 } },
+    // })
 
     // Save script to library
     await prisma.script.create({
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Generate video error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'An error occurred' },
+      { error: error instanceof Error ? error.message : 'An error occurred. Make sure you have a Gemini API key configured in Settings.' },
       { status: 500 }
     )
   }

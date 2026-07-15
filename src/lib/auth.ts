@@ -35,14 +35,44 @@ export async function verifyToken(token: string): Promise<{ userId: string } | n
   }
 }
 
+// Auto-create default user for public access
+export async function getOrCreateDefaultUser(): Promise<User> {
+  const defaultEmail = 'default@autotube.local'
+  
+  let user = await prisma.user.findUnique({
+    where: { email: defaultEmail },
+  })
+  
+  if (!user) {
+    const hashedPassword = await bcrypt.hash('default-password-' + Date.now(), 12)
+    user = await prisma.user.create({
+      data: {
+        email: defaultEmail,
+        password: hashedPassword,
+        name: 'AutoTube User',
+        role: 'USER',
+        credits: 1000,
+      },
+    })
+  }
+  
+  return user as User
+}
+
 export async function getCurrentUser(): Promise<User | null> {
   const cookieStore = await cookies()
   const token = cookieStore.get(COOKIE_NAME)?.value
   
-  if (!token) return null
+  if (!token) {
+    // Auto-create and return default user for public access
+    return await getOrCreateDefaultUser()
+  }
   
   const payload = await verifyToken(token)
-  if (!payload) return null
+  if (!payload) {
+    // Auto-create and return default user for public access
+    return await getOrCreateDefaultUser()
+  }
   
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
@@ -55,6 +85,10 @@ export async function getCurrentUser(): Promise<User | null> {
       createdAt: true,
     },
   })
+  
+  if (!user) {
+    return await getOrCreateDefaultUser()
+  }
   
   return user as User | null
 }

@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { cn, formatDate, formatDuration } from '@/lib/utils'
+import Link from 'next/link'
+import { cn, formatDate } from '@/lib/utils'
 import { Icons } from '@/components/ui/icons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,12 +14,18 @@ type Tab = 'videos' | 'scripts' | 'voices' | 'thumbnails'
 interface LibraryItem {
   id: string
   title: string
-  thumbnailUrl?: string
-  duration?: number
+  thumbnailUrl?: string | null
+  duration?: number | null
   status: string
-  createdAt: string
-  videoUrl?: string
-  resolution?: string
+  createdAt: string | Date
+  videoUrl?: string | null
+  resolution?: string | null
+  script?: string | null
+  content?: string | null
+  niche?: string | null
+  provider?: string | null
+  imageUrl?: string | null
+  template?: string | null
 }
 
 export default function ContentLibraryPage() {
@@ -26,34 +33,33 @@ export default function ContentLibraryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [previewVideo, setPreviewVideo] = useState<LibraryItem | null>(null)
+  const [loading, setLoading] = useState(true)
+  
+  const [videos, setVideos] = useState<LibraryItem[]>([])
+  const [scripts, setScripts] = useState<LibraryItem[]>([])
+  const [voices, setVoices] = useState<LibraryItem[]>([])
+  const [thumbnails, setThumbnails] = useState<LibraryItem[]>([])
 
-  // Mock data
-  const videos: LibraryItem[] = [
-    { id: '1', title: 'The Future of AI in 2025', status: 'COMPLETED', createdAt: '2024-01-15', duration: 180 },
-    { id: '2', title: 'Top 10 Tech Gadgets Review', status: 'COMPLETED', createdAt: '2024-01-14', duration: 240 },
-    { id: '3', title: 'How to Build a Startup', status: 'DRAFT', createdAt: '2024-01-13' },
-    { id: '4', title: 'Healthy Living Tips', status: 'COMPLETED', createdAt: '2024-01-12', duration: 150 },
-    { id: '5', title: 'Morning Motivation', status: 'SCHEDULED', createdAt: '2024-01-11', duration: 120 },
-    { id: '6', title: 'Weekly News Roundup', status: 'COMPLETED', createdAt: '2024-01-10', duration: 300 },
-  ]
+  useEffect(() => {
+    fetchLibrary()
+  }, [])
 
-  const scripts = [
-    { id: '1', title: 'AI Trends 2025', content: 'Welcome to this video about...', niche: 'Technology', createdAt: '2024-01-15' },
-    { id: '2', title: 'Startup Guide', content: 'Starting a business requires...', niche: 'Business', createdAt: '2024-01-14' },
-    { id: '3', title: 'Fitness Tips', content: 'Maintaining good health is...', niche: 'Lifestyle', createdAt: '2024-01-13' },
-  ]
-
-  const voices = [
-    { id: '1', name: 'Aria Voiceover', provider: 'EDGE_TTS', duration: 180, createdAt: '2024-01-15' },
-    { id: '2', name: 'Professional Male', provider: 'ELEVENLABS', duration: 240, createdAt: '2024-01-14' },
-    { id: '3', name: 'British Female', provider: 'EDGE_TTS', duration: 150, createdAt: '2024-01-13' },
-  ]
-
-  const thumbnails = [
-    { id: '1', title: 'AI Video Thumbnail', template: 'minimal', createdAt: '2024-01-15' },
-    { id: '2', title: 'Tech Review', template: 'gradient', createdAt: '2024-01-14' },
-    { id: '3', title: 'Motivation Monday', template: 'neon', createdAt: '2024-01-13' },
-  ]
+  const fetchLibrary = async () => {
+    try {
+      const res = await fetch('/api/library')
+      const data = await res.json()
+      if (res.ok) {
+        setVideos(data.videos || [])
+        setScripts(data.scripts || [])
+        setVoices(data.voices || [])
+        setThumbnails(data.thumbnails || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch library:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const tabs = [
     { id: 'videos' as Tab, label: 'Videos', icon: 'video', count: videos.length },
@@ -61,6 +67,21 @@ export default function ContentLibraryPage() {
     { id: 'voices' as Tab, label: 'Voices', icon: 'mic', count: voices.length },
     { id: 'thumbnails' as Tab, label: 'Thumbnails', icon: 'image', count: thumbnails.length },
   ]
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="animate-pulse space-y-6">
+          <div className="h-8 w-48 bg-muted rounded" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-64 bg-muted rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
@@ -71,10 +92,12 @@ export default function ContentLibraryPage() {
             <h1 className="text-3xl font-bold">Content Library</h1>
             <p className="text-muted-foreground mt-1">Manage all your generated content</p>
           </div>
-          <Button>
-            <Icons.plus className="mr-2 h-4 w-4" />
-            New Video
-          </Button>
+          <Link href="/video-editor">
+            <Button>
+              <Icons.plus className="mr-2 h-4 w-4" />
+              New Video
+            </Button>
+          </Link>
         </div>
 
         {/* Tabs */}
@@ -133,6 +156,18 @@ export default function ContentLibraryPage() {
           </div>
         </div>
 
+        {/* Empty State */}
+        {activeTab === 'videos' && videos.length === 0 && (
+          <div className="text-center py-12">
+            <Icons.video className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No videos yet</h3>
+            <p className="text-muted-foreground mb-4">Create your first AI-generated video</p>
+            <Link href="/video-editor">
+              <Button>Create Video</Button>
+            </Link>
+          </div>
+        )}
+
         {/* Content */}
         <motion.div
           key={activeTab}
@@ -174,9 +209,10 @@ export default function ContentLibraryPage() {
     </DashboardLayout>
   )
 
-  // Handler for downloading video
   function handleDownload(video: LibraryItem) {
-    window.open(`/api/videos/${video.id}/preview`, '_blank')
+    if (video.videoUrl) {
+      window.open(video.videoUrl, '_blank')
+    }
   }
 }
 

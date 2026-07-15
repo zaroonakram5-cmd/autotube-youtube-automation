@@ -50,18 +50,47 @@ export default function VideoEditorPage() {
   }
 
   const handleGenerate = async () => {
+    if (!selectedNiche || !customTopic) {
+      alert('Please select a niche and enter a topic')
+      return
+    }
+    
     setGenerating(true)
-    // Simulate AI generation
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    setGeneratedContent({
-      title: 'The Future of AI in 2025: What You Need to Know',
-      script: 'Welcome to this video about the future of AI...',
-      description: 'Discover the latest AI trends and how they will impact our lives in 2025.',
-      tags: ['AI', 'technology', 'future', 'innovation', 'automation', 'machine learning', 'robotics', 'AI tools'],
-      hashtags: ['#AI', '#Technology', '#FutureTech', '#Innovation', '#MachineLearning', '#AIRevolution'],
-    })
-    setGenerating(false)
-    setCurrentStep('generate')
+    try {
+      const response = await fetch('/api/videos/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          niche: selectedNiche,
+          topic: customTopic,
+          voiceProvider,
+          voiceId: selectedVoice,
+          speed: voiceSpeed,
+          pitch: voicePitch,
+          resolution,
+        }),
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok) {
+        setGeneratedContent({
+          title: data.content.title,
+          script: data.content.script,
+          description: data.content.description,
+          tags: data.content.tags,
+          hashtags: data.content.hashtags,
+        })
+        setCurrentStep('generate')
+      } else {
+        alert(data.error || 'Failed to generate content')
+      }
+    } catch (error) {
+      console.error('Generation error:', error)
+      alert('An error occurred during generation')
+    } finally {
+      setGenerating(false)
+    }
   }
 
   const handleNext = () => {
