@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum VideoStatus {
+  DRAFT
+  GENERATING
+  RENDERING
+  COMPLETED
+  FAILED
+  SCHEDULED
+}
+
+enum VoiceProvider {
+  EDGE_TTS
+  ELEVENLABS
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String?
+  role          Role      @default(USER)
+  credits       Int       @default(100)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // API Keys (encrypted)
+  apiKeys       ApiKey[]
+  
+  // Videos
+  videos        Video[]
+  
+  // Scripts
+  scripts       Script[]
+  
+  // Voices
+  voices        Voice[]
+  
+  // Thumbnails
+  thumbnails    Thumbnail[]
+  
+  // Channels
+  channels      Channel[]
+  
+  // Analytics
+  analytics     Analytics[]
+}
+
+model ApiKey {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String   // openai, gemini, openrouter, groq, anthropic, stability, replicate, elevenlabs
+  encryptedKey String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, provider])
+}
+
+model Video {
+  id              String       @id @default(cuid())
+  userId          String
+  title           String
+  script          String?
+  description     String?
+  tags            String[]
+  hashtags        String[]
+  niche           String?
+  topic           String?
+  status          VideoStatus  @default(DRAFT)
+  videoUrl        String?      // Final rendered video URL
+  thumbnailUrl    String?
+  duration        Int?         // Duration in seconds
+  resolution      String?      // 720p, 1080p
+  voiceoverUrl    String?
+  captionsUrl     String?
+  renderedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  scheduledFor    DateTime?
+  channelId       String?
+  
+  // Relationships
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel         Channel?     @relation(fields: [channelId], references: [id])
+  frames          Frame[]
+  audioTracks     AudioTrack[]
+  
+  @@index([userId])
+  @@index([status])
+}
+
+model Script {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  content     String   @db.Text
+  niche       String?
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model Voice {
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  provider     VoiceProvider
+  voiceId      String?       // Provider-specific voice ID
+  speed        Float         @default(1.0)
+  pitch        Float         @default(1.0)
+  audioUrl     String?
+  duration     Int?          // Duration in seconds
+  createdAt    DateTime      @default(now())
+  
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model Thumbnail {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  imageUrl   String
+  template   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model Channel {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  thumbnailUrl String?
+  videos      Video[]
+  schedules   Schedule[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model Schedule {
+  id           String   @id @default(cuid())
+  channelId    String
+  videoId      String?
+  scheduledFor DateTime
+  status       String   @default("PENDING") // PENDING, PROCESSING, PUBLISHED, FAILED
+  publishedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  @@index([channelId])
+  @@index([scheduledFor])
+}
+
+model Frame {
+  id         String   @id @default(cuid())
+  videoId    String
+  order      Int
+  type       String   // image, text, transition
+  content    String?  // URL for image, text content for text
+  duration   Int      @default(3) // Duration in seconds
+  effects    Json?    // Animation effects, positioning, etc.
+  
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  
+  @@index([videoId])
+}
+
+model AudioTrack {
+  id         String   @id @default(cuid())
+  videoId    String
+  order      Int
+  type       String   // voiceover, background_music, sfx
+  audioUrl   String
+  volume     Float    @default(1.0)
+  startTime  Int      @default(0) // Start time in seconds
+  duration   Int?     // Duration in seconds
+  
+  video      Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  
+  @@index([videoId])
+}
+
+model Analytics {
+  id           String   @id @default(cuid())
+  userId       String
+  date         DateTime @default(now()) @db.Date
+  videosCreated Int     @default(0)
+  videosRendered Int    @default(0)
+  apiCalls     Json?    // { openai: 10, elevenlabs: 5, ... }
+  storageUsed  BigInt   @default(0) // Bytes
+  creditsUsed  Int      @default(0)
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}

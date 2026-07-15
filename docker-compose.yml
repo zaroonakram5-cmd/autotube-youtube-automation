@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://autotube:autotube_secret@postgres:5432/autotube
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      - FFMPEG_PATH=/usr/bin/ffmpeg
+      - STORAGE_PATH=/app/storage
+    volumes:
+      - ./storage:/app/storage
+      - ./prisma:/app/prisma
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=autotube
+      - POSTGRES_PASSWORD=autotube_secret
+      - POSTGRES_DB=autotube
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  # Optional: FFmpeg worker for video rendering
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    command: npm run worker
+    environment:
+      - DATABASE_URL=postgresql://autotube:autotube_secret@postgres:5432/autotube
+      - REDIS_URL=redis://redis:6379
+      - FFMPEG_PATH=/usr/bin/ffmpeg
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
