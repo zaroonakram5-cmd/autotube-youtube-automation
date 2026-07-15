@@ -843,6 +843,7 @@ function RenderStep({ content, resolution, onBack }: {
   const [isPlaying, setIsPlaying] = useState(false)
   const [videoId, setVideoId] = useState<string | null>(null)
   const [renderComplete, setRenderComplete] = useState(false)
+  const [renderStatus, setRenderStatus] = useState('')
 
   const startRender = async () => {
     if (!content?.title) {
@@ -852,9 +853,29 @@ function RenderStep({ content, resolution, onBack }: {
 
     setRendering(true)
     setProgress(0)
+    setRenderStatus('Generating video...')
 
     try {
-      // Save video to database first
+      // Import video generator dynamically (client-side only)
+      const { generateVideo, downloadVideo } = await import('@/lib/video-generator')
+
+      setProgress(20)
+      setRenderStatus('Creating video frames...')
+
+      // Generate video using client-side APIs
+      const videoBlob = await generateVideo({
+        title: content.title,
+        script: content.script || 'Welcome to this video',
+        speed: 1.0,
+        onProgress: (p) => {
+          setProgress(20 + Math.floor(p * 0.6))
+        }
+      })
+
+      setProgress(85)
+      setRenderStatus('Preparing download...')
+
+      // Save video to database
       const saveRes = await fetch('/api/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -864,7 +885,7 @@ function RenderStep({ content, resolution, onBack }: {
           description: content.description,
           tags: content.tags,
           hashtags: content.hashtags,
-          status: 'RENDERING',
+          status: 'COMPLETED',
           resolution,
         }),
       })
@@ -874,90 +895,79 @@ function RenderStep({ content, resolution, onBack }: {
         setVideoId(saveData.video.id)
       }
 
-      // Simulate rendering progress
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-        setProgress(i)
-      }
+      setProgress(95)
+      setRenderStatus('Download starting...')
+
+      // Download the video (WebM format - browser native)
+      const filename = `${content.title.replace(/[^a-z0-9]/gi, '_')}_video.webm`
+      downloadVideo(videoBlob, filename)
 
       setRenderComplete(true)
+      setProgress(100)
+      setRenderStatus('Complete!')
       
-      // Update video status to completed
-      if (saveData.video?.id) {
-        await fetch(`/api/videos/${saveData.video.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: 'COMPLETED',
-            duration: Math.floor(Math.random() * 180) + 60,
-          }),
-        })
-      }
     } catch (error) {
       console.error('Render error:', error)
-      alert('An error occurred during rendering')
+      alert('An error occurred during rendering. Please try again.')
+      setRendering(false)
     } finally {
       setRendering(false)
     }
   }
 
   const handleDownloadContent = async () => {
-    if (videoId) {
-      // Download video content as JSON
-      window.open(`/api/videos/${videoId}/download`, '_blank')
-    } else {
-      // Download content from props as JSON file
-      const contentData = {
-        title: content?.title || 'Untitled',
-        script: content?.script || '',
-        description: content?.description || '',
-        tags: content?.tags || [],
-        hashtags: content?.hashtags || [],
-        resolution,
-        downloadedAt: new Date().toISOString(),
-      }
-      
-      const blob = new Blob([JSON.stringify(contentData, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${content?.title?.replace(/[^a-z0-9]/gi, '_') || 'video'}_content.json`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+    // Download content as JSON
+    const contentData = {
+      title: content?.title || 'Untitled',
+      script: content?.script || '',
+      description: content?.description || '',
+      tags: content?.tags || [],
+      hashtags: content?.hashtags || [],
+      resolution,
+      downloadedAt: new Date().toISOString(),
     }
+    
+    const blob = new Blob([JSON.stringify(contentData, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${content?.title?.replace(/[^a-z0-9]/gi, '_') || 'video'}_content.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   return (
     <div className="space-y-6">
       <div className="bg-card rounded-xl p-6 border border-border">
-        <h2 className="text-xl font-semibold mb-6">Render & Download</h2>
+        <h2 className="text-xl font-semibold mb-6">Render & Download MP4</h2>
 
         <div className="space-y-6">
-          {/* Video Preview Placeholder */}
+          {/* Video Preview */}
           <div className="aspect-video bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg flex items-center justify-center relative overflow-hidden border border-gray-700">
             {rendering ? (
               <div className="text-center">
                 <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                 <p className="text-white">Rendering your video...</p>
-                <p className="text-sm text-gray-400 mt-2">{progress}% complete</p>
+                <p className="text-sm text-gray-400 mt-2">{progress}%</p>
+                <p className="text-xs text-gray-500 mt-1">{renderStatus}</p>
               </div>
             ) : renderComplete ? (
               <div className="text-center">
                 <Icons.check className="h-20 w-20 text-green-500 mx-auto mb-4" />
-                <p className="text-white font-medium">Video Content Ready!</p>
-                <p className="text-sm text-gray-400 mt-1">Download your script and metadata below</p>
+                <p className="text-white font-medium">Video Downloaded!</p>
+                <p className="text-sm text-gray-400 mt-1">Check your downloads folder</p>
               </div>
             ) : (
               <div className="text-center">
                 <Icons.video className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-500">Click "Save Content" to save your video metadata</p>
+                <p className="text-gray-500">Click "Render & Download" to create your video</p>
               </div>
             )}
           </div>
 
-          {/* Info Box */}
+          {/* Video Info */}
           <div className="p-4 rounded-lg bg-muted/50 border border-border">
             <div className="flex items-center gap-3 mb-2">
               <Icons.info className="h-5 w-5 text-blue-500" />
@@ -966,22 +976,22 @@ function RenderStep({ content, resolution, onBack }: {
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
               <span>Resolution: {resolution}</span>
               <span>•</span>
-              <span>Format: JSON</span>
+              <span>Format: WebM (HD)</span>
               <span>•</span>
-              <span>Includes: Script, Tags, Description</span>
+              <span>Audio: Text-to-Speech</span>
             </div>
           </div>
 
-          {/* Note about video rendering */}
-          <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+          {/* Supported Formats Note */}
+          <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
             <div className="flex items-start gap-3">
-              <Icons.alertCircle className="h-5 w-5 text-yellow-500 mt-0.5" />
+              <Icons.info className="h-5 w-5 text-blue-500 mt-0.5" />
               <div>
-                <p className="font-medium text-yellow-500">Video Rendering Note</p>
+                <p className="font-medium text-blue-500">Browser Video Generation</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Full video rendering with FFmpeg requires a self-hosted server. 
-                  For Vercel deployment, you can download your script and content metadata.
-                  Use the downloaded content with external video editors or rendering services.
+                  Videos are generated directly in your browser using Web Speech API and Canvas.
+                  Format is WebM which is supported by all modern browsers. For MP4, 
+                  use a converter like HandBrake to convert WebM to MP4.
                 </p>
               </div>
             </div>
@@ -991,7 +1001,7 @@ function RenderStep({ content, resolution, onBack }: {
           {rendering && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Saving progress</span>
+                <span className="text-muted-foreground">{renderStatus}</span>
                 <span className="font-medium">{progress}%</span>
               </div>
               <div className="progress-bar">
@@ -1005,42 +1015,42 @@ function RenderStep({ content, resolution, onBack }: {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3">
-            {!renderComplete ? (
-              <Button 
-                onClick={startRender} 
-                size="lg" 
-                className="flex-1"
-                disabled={rendering || !content?.title}
-              >
-                {rendering ? (
-                  <>
-                    <Icons.spinner className="mr-2 h-5 w-5 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Icons.save className="mr-2 h-5 w-5" />
-                    Save Content
-                  </>
-                )}
-              </Button>
-            ) : (
-              <Button 
-                onClick={handleDownloadContent} 
-                size="lg" 
-                className="flex-1"
-              >
-                <Icons.download className="mr-2 h-5 w-5" />
-                Download Content (JSON)
-              </Button>
-            )}
+            <Button 
+              onClick={startRender} 
+              size="lg" 
+              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              disabled={rendering || !content?.title}
+            >
+              {rendering ? (
+                <>
+                  <Icons.spinner className="mr-2 h-5 w-5 animate-spin" />
+                  Rendering...
+                </>
+              ) : (
+                <>
+                  <Icons.play className="mr-2 h-5 w-5" />
+                  Render & Download Video
+                </>
+              )}
+            </Button>
+            <Button 
+              onClick={handleDownloadContent} 
+              size="lg" 
+              variant="outline"
+            >
+              <Icons.download className="mr-2 h-5 w-5" />
+              Download Script (JSON)
+            </Button>
           </div>
 
           {renderComplete && (
-            <div className="text-center">
-              <p className="text-sm text-green-500 mb-3">
-                <Icons.check className="inline h-4 w-4 mr-1" />
-                Content saved to your library!
+            <div className="text-center p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+              <p className="text-green-500 font-medium">
+                <Icons.check className="inline h-5 w-5 mr-1" />
+                Video downloaded successfully!
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Check your downloads folder for the WebM video file
               </p>
             </div>
           )}
