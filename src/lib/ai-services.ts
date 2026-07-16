@@ -1,13 +1,8 @@
 import prisma from './prisma'
 import type { GeneratedContent, VideoGenerationRequest } from '@/types'
 
-// Get API key - first check environment variable, then user database
+// Get API key from user's saved keys in database
 async function getApiKey(userId: string, provider: string): Promise<string | null> {
-  // First check environment variable (global fallback)
-  const envKey = process.env[`${provider.toUpperCase()}_API_KEY`]
-  if (envKey) return envKey
-  
-  // Then check user-saved API key in database
   try {
     const apiKey = await prisma.apiKey.findUnique({
       where: {
@@ -157,19 +152,199 @@ export async function generateContentWithGrokBeta(
   return JSON.parse(jsonMatch[0])
 }
 
-// Primary content generation using xAI Grok
+// Gemini Content Generation
+async function generateContentWithGemini(
+  userId: string,
+  niche: string,
+  topic: string
+): Promise<GeneratedContent> {
+  const apiKey = await getApiKey(userId, 'gemini')
+  if (!apiKey) throw new Error('Gemini API key not configured')
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `Create a YouTube video script for niche: ${niche}, topic: ${topic}. Return JSON: {"title":"...","script":"...","description":"...","tags":[...],"hashtags":[...]}`,
+          }],
+        }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 4096 },
+      }),
+    }
+  )
+
+  if (!response.ok) throw new Error(`Gemini API error: ${response.status}`)
+
+  const data = await response.json()
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Failed to parse Gemini response')
+  return JSON.parse(jsonMatch[0])
+}
+
+// Primary content generation - tries multiple AI providers
 export async function generateVideoContent(
   userId: string,
   request: VideoGenerationRequest
 ): Promise<GeneratedContent> {
-  try {
-    // Try Grok 2 first
-    return await generateContentWithGrok(userId, request.niche, request.topic)
-  } catch (error) {
-    // If Grok 2 fails, try Grok Beta as fallback
-    console.error('Grok 2 failed, trying Grok Beta:', error)
-    return await generateContentWithGrokBeta(userId, request.niche, request.topic)
+  // Try providers in order of preference
+  const providers = ['xai', 'openai', 'gemini', 'openrouter', 'groq']
+  
+  let lastError = null
+  
+  for (const provider of providers) {
+    const apiKey = await getApiKey(userId, provider)
+    if (!apiKey) continue
+    
+    try {
+      switch (provider) {
+        case 'xai':
+          return await generateContentWithGrok(userId, request.niche, request.topic)
+        case 'openai':
+          return await generateContentWithOpenAI(userId, request.niche, request.topic)
+        case 'gemini':
+          return await generateContentWithGemini(userId, request.niche, request.topic)
+        case 'openrouter':
+          return await generateContentWithOpenRouter(userId, request.niche, request.topic)
+        case 'groq':
+          return await generateContentWithGroq(userId, request.niche, request.topic)
+      }
+    } catch (error) {
+      console.error(`${provider} failed:`, error)
+      lastError = error
+      continue
+    }
   }
+  
+  throw lastError || new Error('No AI API keys configured. Please add an API key in Settings.')
+}
+
+// OpenAI Content Generation
+async function generateContentWithOpenAI(
+  userId: string,
+  niche: string,
+  topic: string
+): Promise<GeneratedContent> {
+  const apiKey = await getApiKey(userId, 'openai')
+  if (!apiKey) throw new Error('OpenAI API key not configured')
+
+  const response = await fetch(
+    'https://api.openai.com/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert YouTube script writer.',
+          },
+          {
+            role: 'user',
+            content: `Niche: ${niche}\nTopic: ${topic}\n\nReturn JSON: {"title":"...","script":"...","description":"...","tags":[...],"hashtags":[...]}`,
+          },
+        ],
+        temperature: 0.9,
+        max_tokens: 4096,
+      }),
+    }
+  )
+
+  if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`)
+
+  const data = await response.json()
+  const content = data.choices[0].message.content
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Failed to parse OpenAI response')
+  return JSON.parse(jsonMatch[0])
+}
+
+// OpenRouter Content Generation
+async function generateContentWithOpenRouter(
+  userId: string,
+  niche: string,
+  topic: string
+): Promise<GeneratedContent> {
+  const apiKey = await getApiKey(userId, 'openrouter')
+  if (!apiKey) throw new Error('OpenRouter API key not configured')
+
+  const response = await fetch(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://your-site.com',
+        'X-Title': 'YouTube Automation',
+      },
+      body: JSON.stringify({
+        model: 'openai/gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'user',
+            content: `Create a YouTube video script for niche: ${niche}, topic: ${topic}. Return JSON: {"title":"...","script":"...","description":"...","tags":[...],"hashtags":[...]}`,
+          },
+        ],
+        max_tokens: 4096,
+      }),
+    }
+  )
+
+  if (!response.ok) throw new Error(`OpenRouter API error: ${response.status}`)
+
+  const data = await response.json()
+  const content = data.choices[0].message.content
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Failed to parse OpenRouter response')
+  return JSON.parse(jsonMatch[0])
+}
+
+// Groq Content Generation
+async function generateContentWithGroq(
+  userId: string,
+  niche: string,
+  topic: string
+): Promise<GeneratedContent> {
+  const apiKey = await getApiKey(userId, 'groq')
+  if (!apiKey) throw new Error('Groq API key not configured')
+
+  const response = await fetch(
+    'https://api.groq.com/openai/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'mixtral-8x7b-32768',
+        messages: [
+          {
+            role: 'user',
+            content: `Create a YouTube video script for niche: ${niche}, topic: ${topic}. Return JSON: {"title":"...","script":"...","description":"...","tags":[...],"hashtags":[...]}`,
+          },
+        ],
+        max_tokens: 4096,
+      }),
+    }
+  )
+
+  if (!response.ok) throw new Error(`Groq API error: ${response.status}`)
+
+  const data = await response.json()
+  const content = data.choices[0].message.content
+  const jsonMatch = content.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('Failed to parse Groq response')
+  return JSON.parse(jsonMatch[0])
 }
 
 // Check API key validity

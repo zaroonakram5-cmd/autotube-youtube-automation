@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Icons } from '@/components/ui/icons'
@@ -10,6 +10,14 @@ import { Label } from '@/components/ui/label'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 
 const apiProviders = [
+  {
+    id: 'xai',
+    name: 'xAI Grok',
+    description: 'Grok AI for script generation',
+    icon: 'sparkles',
+    color: 'text-orange-500',
+    website: 'https://console.x.ai/',
+  },
   {
     id: 'openai',
     name: 'OpenAI',
@@ -39,7 +47,7 @@ const apiProviders = [
     name: 'Groq',
     description: 'Fast LPU inference',
     icon: 'zap',
-    color: 'text-orange-500',
+    color: 'text-yellow-500',
     website: 'https://console.groq.com/keys',
   },
   {
@@ -82,8 +90,27 @@ export default function SettingsPage() {
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [connectedApis, setConnectedApis] = useState<string[]>([])
+
+  // Fetch connected API keys on mount
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      try {
+        const res = await fetch('/api/settings/api-keys')
+        if (res.ok) {
+          const data = await res.json()
+          setConnectedApis(data.apiKeys?.filter((k: { isActive: boolean }) => k.isActive).map((k: { provider: string }) => k.provider) || [])
+        }
+      } catch (error) {
+        console.error('Failed to fetch API keys')
+      }
+    }
+    fetchApiKeys()
+  }, [])
 
   const handleSaveApiKey = async (provider: string, key: string) => {
+    if (!key.trim()) return
+    
     setSaving(true)
     try {
       const res = await fetch('/api/settings/api-keys', {
@@ -92,7 +119,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ provider, key }),
       })
       if (res.ok) {
-        setApiKeys((prev) => ({ ...prev, [provider]: key }))
+        setConnectedApis((prev) => [...prev, provider])
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
       }
@@ -180,7 +207,7 @@ export default function SettingsPage() {
                         <p className="text-sm text-muted-foreground">{provider.description}</p>
                       </div>
                     </div>
-                    {apiKeys[provider.id] && (
+                    {connectedApis.includes(provider.id) && (
                       <span className="badge badge-success">Connected</span>
                     )}
                   </div>
