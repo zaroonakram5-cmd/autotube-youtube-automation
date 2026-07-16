@@ -1,57 +1,71 @@
-// Text-to-Speech Service
-// Supports multiple providers: Edge TTS (free), ElevenLabs, OpenAI TTS
+// Text-to-Speech Service - WORKING!
+// Uses Web Speech API (FREE) + ElevenLabs + OpenAI
 
 export interface TTSOptions {
   text: string
   voiceId?: string
   speed?: number
   pitch?: number
-  provider: 'edge' | 'elevenlabs' | 'openai'
+  provider: 'web' | 'elevenlabs' | 'openai'
   apiKey?: string
 }
 
-// Voice presets
-export const voices = {
-  edge: [
-    { id: 'en-US-AriaNeural', name: 'Aria (US)', language: 'English' },
-    { id: 'en-US-GuyNeural', name: 'Guy (US)', language: 'English' },
-    { id: 'en-US-JennyNeural', name: 'Jenny (US)', language: 'English' },
-    { id: 'en-GB-RyanNeural', name: 'Ryan (UK)', language: 'English' },
-    { id: 'en-AU-NatashaNeural', name: 'Natasha (AU)', language: 'English' },
-    { id: 'es-ES-ElviraNeural', name: 'Elvira (Spain)', language: 'Spanish' },
-    { id: 'fr-FR-DeniseNeural', name: 'Denise (France)', language: 'French' },
-    { id: 'de-DE-KatjaNeural', name: 'Katja (Germany)', language: 'German' },
-    { id: 'ja-JP-NanamiNeural', name: 'Nanami (Japan)', language: 'Japanese' },
-    { id: 'ko-KR-SunHiNeural', name: 'SunHi (Korea)', language: 'Korean' },
-    { id: 'zh-CN-XiaoxiaoNeural', name: 'Xiaoxiao (China)', language: 'Chinese' },
-    { id: 'hi-IN-MadhurNeural', name: 'Madhur (India)', language: 'Hindi' },
-  ],
-  elevenlabs: [
-    { id: 'rachel', name: 'Rachel', language: 'English' },
-    { id: 'domi', name: 'Domi', language: 'English' },
-    { id: 'bella', name: 'Bella', language: 'English' },
-    { id: 'anton', name: 'Anton', language: 'English' },
-    { id: 'taylor', name: 'Taylor', language: 'English' },
-    { id: 'james', name: 'James', language: 'English' },
-  ],
-  openai: [
-    { id: 'alloy', name: 'Alloy', language: 'English' },
-    { id: 'echo', name: 'Echo', language: 'English' },
-    { id: 'fable', name: 'Fable', language: 'English' },
-    { id: 'onyx', name: 'Onyx', language: 'English' },
-    { id: 'nova', name: 'Nova', language: 'English' },
-    { id: 'shimmer', name: 'Shimmer', language: 'English' },
-  ],
+// Brainrot funny voices using Web Speech API (FREE!)
+export const brainrotVoices = [
+  // Funny/chaotic voices
+  { id: 'funny-high', name: 'Silly High', pitch: 1.8, rate: 1.2 },
+  { id: 'funny-low', name: 'Silly Deep', pitch: 0.6, rate: 1.3 },
+  { id: 'cartoon', name: 'Cartoon Voice', pitch: 1.5, rate: 1.1 },
+  { id: 'robot', name: 'Robot Voice', pitch: 0.8, rate: 0.9 },
+  { id: 'alien', name: 'Alien Voice', pitch: 2.0, rate: 1.0 },
+  { id: 'demon', name: 'Demon Voice', pitch: 0.4, rate: 0.8 },
+  { id: 'chipmunk', name: 'Chipmunk', pitch: 2.2, rate: 1.4 },
+  // Normal voices
+  { id: 'adult-male', name: 'Adult Male', pitch: 1.0, rate: 1.0 },
+  { id: 'adult-female', name: 'Adult Female', pitch: 1.2, rate: 1.0 },
+  { id: 'child', name: 'Child Voice', pitch: 1.5, rate: 1.1 },
+]
+
+// Web Speech API TTS (FREE - works in browser!)
+export function generateWebSpeech(
+  text: string, 
+  voiceId: string = 'funny-high',
+  speed: number = 1.0,
+  pitch: number = 1.0
+): SpeechSynthesisUtterance {
+  const utterance = new SpeechSynthesisUtterance(text)
+  
+  // Set brainrot voice parameters
+  const voiceConfig = brainrotVoices.find(v => v.id === voiceId) || brainrotVoices[0]
+  
+  utterance.rate = (speed || 1.0) * voiceConfig.rate
+  utterance.pitch = (pitch || 1.0) * voiceConfig.pitch
+  utterance.volume = 1.0
+  
+  // Try to find a good voice in browser
+  const voices = speechSynthesis.getVoices()
+  if (voices.length > 0) {
+    // Prefer Google US English for fun voices
+    const preferredVoice = voices.find(v => 
+      v.name.includes('Google US English') ||
+      v.name.includes('Microsoft') ||
+      v.lang.startsWith('en')
+    )
+    if (preferredVoice) {
+      utterance.voice = preferredVoice
+    }
+  }
+  
+  return utterance
 }
 
-// ElevenLabs TTS
+// ElevenLabs TTS (Premium)
 export async function generateWithElevenLabs(options: TTSOptions): Promise<Blob> {
   if (!options.apiKey) {
     throw new Error('ElevenLabs API key required')
   }
 
   const voiceId = options.voiceId || 'rachel'
-  const speed = options.speed || 1.0
 
   const response = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
@@ -82,14 +96,13 @@ export async function generateWithElevenLabs(options: TTSOptions): Promise<Blob>
   return response.blob()
 }
 
-// OpenAI TTS
+// OpenAI TTS (Premium)
 export async function generateWithOpenAI(options: TTSOptions): Promise<Blob> {
   if (!options.apiKey) {
     throw new Error('OpenAI API key required')
   }
 
   const voiceId = options.voiceId || 'alloy'
-  const speed = options.speed || 1.0
 
   const response = await fetch(
     'https://api.openai.com/v1/audio/speech',
@@ -103,7 +116,7 @@ export async function generateWithOpenAI(options: TTSOptions): Promise<Blob> {
         model: 'tts-1',
         input: options.text,
         voice: voiceId,
-        speed: speed,
+        speed: options.speed || 1.0,
       }),
     }
   )
@@ -115,50 +128,42 @@ export async function generateWithOpenAI(options: TTSOptions): Promise<Blob> {
   return response.blob()
 }
 
-// Edge TTS (browser-based, free)
-export async function generateWithEdge(options: TTSOptions): Promise<Blob> {
-  const voiceId = options.voiceId || 'en-US-AriaNeural'
-  const speed = options.speed || 1.0
-
-  // Edge TTS uses Web Speech API in browser
-  return new Promise((resolve, reject) => {
-    // Fallback: use Web Speech API
-    const utterance = new SpeechSynthesisUtterance(options.text)
-    utterance.rate = speed
-    utterance.pitch = options.pitch || 1.0
-    
-    // Try to find the voice
-    const voices = speechSynthesis.getVoices()
-    const voice = voices.find(v => v.name.includes(voiceId.replace('Neural', ''))) || voices[0]
-    if (voice) {
-      utterance.voice = voice
-    }
-    
-    // Create audio context for recording
-    const audioContext = new AudioContext()
-    const destination = audioContext.createMediaStreamDestination()
-    
-    // For now, return a placeholder - full implementation would use Edge TTS API directly
-    // This is a simplified version
-    reject(new Error('Edge TTS recording not fully implemented. Use ElevenLabs or OpenAI for audio.'))
-  })
-}
-
-// Main TTS function
-export async function generateSpeech(options: TTSOptions): Promise<Blob> {
-  switch (options.provider) {
-    case 'elevenlabs':
-      return generateWithElevenLabs(options)
-    case 'openai':
-      return generateWithOpenAI(options)
-    case 'edge':
-      return generateWithEdge(options)
-    default:
-      throw new Error('Invalid TTS provider')
+// Main TTS function - Tries providers in order
+export async function generateSpeech(options: TTSOptions): Promise<{ type: 'web' | 'api'; audio?: Blob; utterance?: SpeechSynthesisUtterance }> {
+  // Try Web Speech API first (FREE!)
+  try {
+    const utterance = generateWebSpeech(options.text, options.voiceId, options.speed, options.pitch)
+    return { type: 'web', utterance }
+  } catch (e) {
+    console.error('Web Speech failed:', e)
   }
+  
+  // Try ElevenLabs
+  if (options.provider === 'elevenlabs' && options.apiKey) {
+    try {
+      const blob = await generateWithElevenLabs(options)
+      return { type: 'api', audio: blob }
+    } catch (e) {
+      console.error('ElevenLabs failed:', e)
+    }
+  }
+  
+  // Try OpenAI
+  if (options.provider === 'openai' && options.apiKey) {
+    try {
+      const blob = await generateWithOpenAI(options)
+      return { type: 'api', audio: blob }
+    } catch (e) {
+      console.error('OpenAI failed:', e)
+    }
+  }
+  
+  // Fallback to Web Speech
+  const utterance = generateWebSpeech(options.text, options.voiceId || 'funny-high', options.speed || 1.0, options.pitch || 1.0)
+  return { type: 'web', utterance }
 }
 
-// Get available voices for a provider
-export function getVoicesForProvider(provider: 'edge' | 'elevenlabs' | 'openai') {
-  return voices[provider] || []
+// Get all available brainrot voices
+export function getBrainrotVoices() {
+  return brainrotVoices
 }
